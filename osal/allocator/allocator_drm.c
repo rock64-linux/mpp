@@ -68,7 +68,9 @@ static int drm_ioctl(int fd, int req, void *arg)
 static void* drm_mmap(int fd, size_t len, int prot, int flags, loff_t offset)
 {
     static unsigned long pagesize_mask = 0;
+#if !defined(__gnu_linux__)
     func_mmap64 fp_mmap64 = mpp_rt_get_mmap64();
+#endif
 
     if (fd < 0)
         return NULL;
@@ -76,16 +78,16 @@ static void* drm_mmap(int fd, size_t len, int prot, int flags, loff_t offset)
     if (!pagesize_mask)
         pagesize_mask = sysconf(_SC_PAGESIZE) - 1;
 
-    len = (len + pagesize_mask) & ~pagesize_mask;
+    offset = (offset + pagesize_mask) & ~pagesize_mask;
 
-    if (offset & 4095) {
-        return NULL;
-    }
-
+#if !defined(__gnu_linux__)
     if (fp_mmap64)
         return fp_mmap64(NULL, len, prot, flags, fd, offset);
 
     return NULL;
+#else
+    return mmap(NULL, len, prot, flags, fd, offset);
+#endif
 }
 
 static int drm_handle_to_fd(int fd, RK_U32 handle, int *map_fd, RK_U32 flags)
@@ -203,10 +205,23 @@ static int drm_alloc(int fd, size_t len, size_t align, RK_U32 *handle)
 
 static int drm_free(int fd, RK_U32 handle)
 {
+    RK_S32 ret = 0;
     struct drm_mode_destroy_dumb data = {
         .handle = handle,
     };
-    return drm_ioctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &data);
+    struct drm_gem_close arg;
+
+    ret = drm_ioctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &data);
+    if (ret)
+        return -errno;
+
+    memset(&arg, 0, sizeof(arg));
+    arg.handle = handle;
+    ret = drm_ioctl(fd, DRM_IOCTL_GEM_CLOSE, &arg);
+    if (ret)
+        return -errno;
+
+    return 0;
 }
 
 static MPP_RET os_allocator_drm_open(void **ctx, size_t alignment)
