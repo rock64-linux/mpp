@@ -22,6 +22,7 @@
 #include "mpp_log.h"
 #include "mpp_hal.h"
 #include "mpp_rc.h"
+#include "mpp_device.h"
 
 #include "h264e_syntax.h"
 
@@ -402,6 +403,7 @@ typedef struct H264eHalContext_t {
     MppHalApi                       api;
     RK_S32                          vpu_fd;
     IOInterruptCB                   int_cb;
+    MppDevCtx                       dev_ctx;
     h264e_feedback                  feedback;
     void                            *regs;
     void                            *ioctl_input;
